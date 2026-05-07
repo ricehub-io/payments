@@ -23,7 +23,6 @@ func run() error {
 	}
 
 	polar := polar.NewPolar(cfg.PolarToken, cfg.PolarSandbox)
-	_ = polar
 
 	port := ":" + cfg.Port
 	lis, err := net.Listen("tcp", port)
@@ -31,8 +30,9 @@ func run() error {
 		return fmt.Errorf("net listen: %w", err)
 	}
 
+	paymentServer := NewPaymentServer(polar)
 	grpcServer := grpc.NewServer()
-	paymentv1.RegisterPaymentServiceServer(grpcServer, &paymentServer{})
+	paymentv1.RegisterPaymentServiceServer(grpcServer, paymentServer)
 
 	log.Printf("gRPC server available at 127.0.0.1%s", port)
 	if err := grpcServer.Serve(lis); err != nil {
