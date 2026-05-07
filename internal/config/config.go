@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"fmt"
@@ -10,10 +10,13 @@ import (
 )
 
 type Config struct {
-	Port         string
-	Reflection   bool
-	PolarSandbox bool
-	PolarToken   string
+	Port               uint16
+	Reflection         bool
+	WebhookPort        uint16
+	DatabaseURL        string
+	PolarSandbox       bool
+	PolarToken         string
+	PolarWebhookSecret string
 }
 
 // NewConfig loads .env file and parses it into new config struct.
@@ -25,10 +28,13 @@ func NewConfig() (*Config, error) {
 	}
 
 	return &Config{
-		Port:         getOptEnv("PORT", "50051"),
-		Reflection:   getOptEnvBool("REFLECTION", "false"),
-		PolarSandbox: getOptEnvBool("POLAR_SANDBOX", "false"),
-		PolarToken:   getEnv("POLAR_TOKEN"),
+		Port:               getOptEnvUint16("PORT", "50051"),
+		Reflection:         getOptEnvBool("REFLECTION", "false"),
+		WebhookPort:        getOptEnvUint16("WEBHOOK_PORT", "8080"),
+		DatabaseURL:        getEnv("DATABASE_URL"),
+		PolarSandbox:       getOptEnvBool("POLAR_SANDBOX", "false"),
+		PolarToken:         getEnv("POLAR_TOKEN"),
+		PolarWebhookSecret: getEnv("POLAR_WEBHOOK_SECRET"),
 	}, nil
 }
 
@@ -58,4 +64,13 @@ func getOptEnvBool(key, fallback string) bool {
 		log.Fatalf("could not parse '%s' as bool: %v", valStr, err)
 	}
 	return val
+}
+
+func getOptEnvUint16(key, fallback string) uint16 {
+	valStr := getOptEnv(key, fallback)
+	val, err := strconv.ParseUint(valStr, 10, 16)
+	if err != nil {
+		log.Fatalf("could not parse '%s' as uint16: %v", valStr, err)
+	}
+	return uint16(val)
 }

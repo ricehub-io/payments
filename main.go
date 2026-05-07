@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 
+	"github.com/ricehub-io/payments/internal/config"
+	"github.com/ricehub-io/payments/internal/db"
 	"github.com/ricehub-io/payments/internal/polar"
 	paymentv1 "github.com/ricehub-io/proto/gen/go/payment/v1"
 	"google.golang.org/grpc"
@@ -18,15 +20,21 @@ func main() {
 }
 
 func run() error {
-	cfg, err := NewConfig()
+	cfg, err := config.NewConfig()
 	if err != nil {
 		return fmt.Errorf("new config: %w", err)
 	}
 
-	polar := polar.NewPolar(cfg.PolarToken, cfg.PolarSandbox)
+	db, err := db.NewDatabase(cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("new database: %w", err)
+	}
+	defer db.Close()
 
-	port := ":" + cfg.Port
-	lis, err := net.Listen("tcp", port)
+	polar := polar.NewPolar(cfg, db)
+	go polar.StartWebhookHandler(cfg.WebhookPort)
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
 		return fmt.Errorf("net listen: %w", err)
 	}
@@ -40,7 +48,7 @@ func run() error {
 		reflection.Register(grpcServer)
 	}
 
-	log.Printf("gRPC server available at 127.0.0.1%s", port)
+	log.Printf("gRPC server available at 127.0.0.1:%d", cfg.Port)
 	if err := grpcServer.Serve(lis); err != nil {
 		return fmt.Errorf("grpc serve: %w", err)
 	}
