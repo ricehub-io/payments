@@ -8,6 +8,7 @@ import (
 	"github.com/ricehub-io/payments/internal/polar"
 	paymentv1 "github.com/ricehub-io/proto/gen/go/payment/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -33,6 +34,11 @@ func run() error {
 	paymentServer := NewPaymentServer(polar)
 	grpcServer := grpc.NewServer()
 	paymentv1.RegisterPaymentServiceServer(grpcServer, paymentServer)
+
+	if cfg.Reflection {
+		log.Println("[WARNING] Reflection is enabled!")
+		reflection.Register(grpcServer)
+	}
 
 	log.Printf("gRPC server available at 127.0.0.1%s", port)
 	if err := grpcServer.Serve(lis); err != nil {

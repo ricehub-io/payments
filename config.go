@@ -11,6 +11,7 @@ import (
 
 type Config struct {
 	Port         string
+	Reflection   bool
 	PolarSandbox bool
 	PolarToken   string
 }
@@ -23,15 +24,10 @@ func NewConfig() (*Config, error) {
 		return nil, fmt.Errorf("godotenv load: %w", err)
 	}
 
-	sandboxStr := getOptEnv("POLAR_SANDBOX", "false")
-	sandbox, err := strconv.ParseBool(sandboxStr)
-	if err != nil {
-		log.Fatalf("could not parse '%s' as bool: %v", sandboxStr, err)
-	}
-
 	return &Config{
 		Port:         getOptEnv("PORT", "50051"),
-		PolarSandbox: sandbox,
+		Reflection:   getOptEnvBool("REFLECTION", "false"),
+		PolarSandbox: getOptEnvBool("POLAR_SANDBOX", "false"),
 		PolarToken:   getEnv("POLAR_TOKEN"),
 	}, nil
 }
@@ -53,4 +49,13 @@ func getOptEnv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+func getOptEnvBool(key, fallback string) bool {
+	valStr := getOptEnv(key, fallback)
+	val, err := strconv.ParseBool(valStr)
+	if err != nil {
+		log.Fatalf("could not parse '%s' as bool: %v", valStr, err)
+	}
+	return val
 }
