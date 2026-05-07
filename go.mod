@@ -7,7 +7,11 @@ require (
 	google.golang.org/grpc v1.81.0
 )
 
+require github.com/spyzhov/ajson v0.8.0 // indirect
+
 require (
+	github.com/joho/godotenv v1.5.1
+	github.com/polarsource/polar-go v0.16.0
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
