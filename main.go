@@ -32,7 +32,11 @@ func run() error {
 	defer db.Close()
 
 	polar := polar.NewPolar(cfg, db)
-	go polar.StartWebhookHandler(cfg.WebhookPort)
+	go func() {
+		if err := polar.StartWebhookHandler(cfg.WebhookPort); err != nil {
+			log.Printf("could not start webhook handler: %v", err)
+		}
+	}()
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
