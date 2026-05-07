@@ -65,7 +65,7 @@ func (p *Polar) handleWebhookEvent(c *gin.Context) {
 		return
 	}
 
-	if err := p.processWebhookEvent(c.Request.Context(), bytes); err != nil {
+	if err := p.processWebhookEvent(c.Request.Context(), webhookID, bytes); err != nil {
 		log.Printf("could not process webhook event: %v", err)
 		c.String(http.StatusInternalServerError, "could not process webhook event")
 		return
@@ -74,7 +74,11 @@ func (p *Polar) handleWebhookEvent(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json", bytes)
 }
 
-func (p *Polar) processWebhookEvent(ctx context.Context, body []byte) error {
+func (p *Polar) processWebhookEvent(
+	ctx context.Context,
+	webhookID string,
+	body []byte,
+) error {
 	var event webhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		return fmt.Errorf("body unmarshal json: %w", err)
@@ -82,8 +86,20 @@ func (p *Polar) processWebhookEvent(ctx context.Context, body []byte) error {
 
 	switch event.Type {
 	case components.WebhookEventTypeSubscriptionActive:
+		if err := p.db.InsertWebhookEvent(ctx, webhookID, string(event.Type), event.Data); err != nil {
+			log.Printf("could not insert webhook event log: %v", err)
+		}
+
 		if err := p.handleSubscriptionActive(ctx, event.Data); err != nil {
+			if dbErr := p.db.UpdateWebhookEventError(ctx, webhookID, err.Error()); dbErr != nil {
+				log.Printf("could not set webhook event error message: %v", dbErr)
+			}
+
 			return fmt.Errorf("handle subscription active: %w", err)
+		}
+
+		if err := p.db.UpdateWebhookEventProcessed(ctx, webhookID); err != nil {
+			log.Printf("could not set webhook event as processed: %v", err)
 		}
 	case components.WebhookEventTypeOrderPaid:
 		// TODO
