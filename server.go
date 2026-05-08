@@ -33,7 +33,7 @@ func (s *paymentServer) CreateCheckout(
 		return nil, status.Error(codes.InvalidArgument, "product_id must be a valid uuid")
 	}
 
-	url, err := s.polar.CreateCheckoutSession(req.UserId, req.ProductId)
+	url, err := s.polar.CreateCheckoutSession(ctx, req.UserId, req.ProductId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "could not create checkout session: %v", err)
 	}

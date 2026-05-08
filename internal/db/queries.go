@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// -- subscriptions --
 func (d *Database) InsertSubscription(
 	ctx context.Context,
 	userID uuid.UUID,
@@ -24,6 +25,18 @@ func (d *Database) InsertSubscription(
 	return err
 }
 
+// UpdateSubscriptionExpiredExcept updates status to 'expired' for all rows
+// that are not present in the given user ID list.
+func (d *Database) UpdateSubscriptionExpiredExcept(
+	ctx context.Context,
+	userIDs []uuid.UUID,
+) (int64, error) {
+	const query = "UPDATE subscriptions SET status = 'expired' WHERE user_id <> ALL($1)"
+	cmd, err := d.pool.Exec(ctx, query, userIDs)
+	return cmd.RowsAffected(), err
+}
+
+// -- webhook_events --
 func (d *Database) InsertWebhookEvent(
 	ctx context.Context,
 	webhookID, eventType string,

@@ -19,7 +19,7 @@ type webhookEvent struct {
 	Data json.RawMessage             `json:"data"`
 }
 
-func (p *Polar) StartWebhookHandler(port uint16) error {
+func (p *Polar) StartWebhookHandler() error {
 	r := gin.Default()
 	if err := r.SetTrustedProxies(nil); err != nil {
 		return fmt.Errorf("gin set trusted proxies: %w", err)
@@ -27,7 +27,7 @@ func (p *Polar) StartWebhookHandler(port uint16) error {
 
 	r.POST("/webhook", p.handleWebhookEvent)
 
-	portStr := fmt.Sprintf(":%d", port)
+	portStr := fmt.Sprintf(":%d", p.cfg.WebhookPort)
 	log.Println("Webhook handler available at http://127.0.0.1" + portStr)
 	if err := r.Run(portStr); err != nil {
 		return fmt.Errorf("router run: %w", err)

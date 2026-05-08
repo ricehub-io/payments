@@ -3,18 +3,19 @@ package polar
 import (
 	"context"
 	"fmt"
-	"time"
 
+	polargo "github.com/polarsource/polar-go"
 	"github.com/polarsource/polar-go/models/components"
+	"github.com/polarsource/polar-go/models/operations"
 )
 
 // CreateCheckoutSession creates a new checkout session for given user ID and product ID.
 // The user ID is set as an external customer ID.
 // Returns URL to the created checkout session.
-func (p *Polar) CreateCheckoutSession(userID, productID string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
+func (p *Polar) CreateCheckoutSession(
+	ctx context.Context,
+	userID, productID string,
+) (string, error) {
 	res, err := p.sdk.Checkouts.Create(ctx, components.CheckoutCreate{
 		Products: []string{productID},
 		CustomerBillingAddress: &components.AddressInput{
@@ -29,26 +30,34 @@ func (p *Polar) CreateCheckoutSession(userID, productID string) (string, error) 
 	return res.Checkout.URL, nil
 }
 
-// ListSubscription fetches 100 most recent active subscriptions.
-func (p *Polar) ListSubscription() error {
-	// ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	// defer cancel()
+// ListSubscription fetches paginated list of all currently active subscriptions.
+func (p *Polar) ListSubscriptions(ctx context.Context) ([]components.Subscription, error) {
+	res, err := p.sdk.Subscriptions.List(ctx, operations.SubscriptionsListRequest{
+		Active: polargo.Bool(true),
+		Limit:  polargo.Int64(32),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("sdk subscriptions list: %w", err)
+	}
 
-	// res, err := p.sdk.Subscriptions.List(ctx, operations.SubscriptionsListRequest{
-	// 	Active: polargo.Bool(true),
-	// 	Limit:  polargo.Int64(100),
-	// })
-	// if err != nil {
-	// 	return fmt.Errorf("sdk subscriptions list: %w", err)
-	// }
+	if res.ListResourceSubscription == nil {
+		return nil, fmt.Errorf("list resource subscription is nil")
+	}
 
-	// if res.ListResourceSubscription == nil {
-	// 	return fmt.Errorf("list resource subscription is nil")
-	// }
+	subCount := res.ListResourceSubscription.Pagination.TotalCount
+	subs := make([]components.Subscription, 0, subCount)
+	for {
+		subs = append(subs, res.ListResourceSubscription.Items...)
 
-	// for {
+		res, err = res.Next()
+		if err != nil {
+			return nil, fmt.Errorf("res next: %w", err)
+		}
 
-	// }
+		if res == nil {
+			break
+		}
+	}
 
-	return nil
+	return subs, nil
 }

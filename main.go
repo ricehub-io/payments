@@ -33,10 +33,11 @@ func run() error {
 
 	polar := polar.NewPolar(cfg, db)
 	go func() {
-		if err := polar.StartWebhookHandler(cfg.WebhookPort); err != nil {
-			log.Printf("could not start webhook handler: %v", err)
+		if err := polar.StartWebhookHandler(); err != nil {
+			log.Printf("[ERROR] Could not start webhook handler: %v", err)
 		}
 	}()
+	go polar.StartSyncThread()
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
