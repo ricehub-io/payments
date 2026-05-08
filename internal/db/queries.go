@@ -25,6 +25,25 @@ func (d *Database) InsertSubscription(
 	return err
 }
 
+// HasUserSubscription fetches whether user has an active subscription in db.
+func (d *Database) HasUserSubscription(
+	ctx context.Context,
+	userID uuid.UUID,
+) (has bool, err error) {
+	const query = `
+	SELECT EXISTS (
+		SELECT 1
+		FROM subscriptions
+		WHERE
+			user_id = $1 AND
+			status = 'active' OR
+			(status = 'canceled' AND current_period_end > now())
+	)
+	`
+	err = d.pool.QueryRow(ctx, query, userID).Scan(&has)
+	return
+}
+
 // UpdateSubscriptionExpiredExcept updates status to 'expired' for all rows
 // that are not present in the given user ID list.
 func (d *Database) UpdateSubscriptionExpiredExcept(

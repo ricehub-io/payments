@@ -44,7 +44,7 @@ func run() error {
 		return fmt.Errorf("net listen: %w", err)
 	}
 
-	paymentServer := NewPaymentServer(polar)
+	paymentServer := NewPaymentServer(db, polar)
 	grpcServer := grpc.NewServer()
 	paymentv1.RegisterPaymentServiceServer(grpcServer, paymentServer)
 
