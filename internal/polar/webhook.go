@@ -8,10 +8,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/polarsource/polar-go/models/components"
+	"github.com/ricehub-io/payments/internal/logging"
 	svix "github.com/svix/svix-webhooks/go"
 	"go.uber.org/zap"
 )
@@ -29,12 +32,24 @@ func (p *Polar) StartWebhookHandler() {
 
 func (p *Polar) setupGin() error {
 	logger := zap.L()
+	isProd := p.cfg.Environment == "prod"
+
+	if isProd {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
 	r := gin.New()
 	if err := r.SetTrustedProxies(nil); err != nil {
 		return fmt.Errorf("gin set trusted proxies: %w", err)
 	}
-	r.Use(ginzap.RecoveryWithZap(logger, true), ginzap.Ginzap(logger, time.RFC3339, true))
+
+	r.Use(
+		ginzap.RecoveryWithZap(logger, true),
+		ginzap.Ginzap(logger, time.RFC3339, true),
+	)
+	if isProd {
+		r.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
+	}
 
 	r.POST("/webhook", p.handleWebhookEvent)
 
@@ -48,7 +63,7 @@ func (p *Polar) setupGin() error {
 }
 
 func (p *Polar) handleWebhookEvent(c *gin.Context) {
-	logger := zap.L()
+	logger := logging.LoggerFromContext(c.Request.Context(), zap.L())
 
 	bytes, err := c.GetRawData()
 	if err != nil {
@@ -68,6 +83,10 @@ func (p *Polar) handleWebhookEvent(c *gin.Context) {
 		return
 	}
 
+	if hub := sentrygin.GetHubFromContext(c); hub != nil {
+		hub.Scope().SetTag("webhook.id", webhookID)
+	}
+
 	headers := http.Header{}
 	headers.Set("webhook-id", webhookID)
 	headers.Set("webhook-timestamp", webhookTimestamp)
@@ -78,7 +97,7 @@ func (p *Polar) handleWebhookEvent(c *gin.Context) {
 		return
 	}
 
-	if err := p.processWebhookEvent(c.Request.Context(), webhookID, bytes); err != nil {
+	if err := p.processWebhookEvent(c.Request.Context(), logger, webhookID, bytes); err != nil {
 		logger.Error("Could not process webhook event", zap.Error(err))
 		c.String(http.StatusInternalServerError, "could not process webhook event")
 		return
@@ -89,14 +108,17 @@ func (p *Polar) handleWebhookEvent(c *gin.Context) {
 
 func (p *Polar) processWebhookEvent(
 	ctx context.Context,
+	logger *zap.Logger,
 	webhookID string,
 	body []byte,
 ) error {
-	logger := zap.L()
-
 	var event webhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		return fmt.Errorf("body unmarshal json: %w", err)
+	}
+
+	if hub := sentry.GetHubFromContext(ctx); hub != nil {
+		hub.Scope().SetTag("webhook.event_type", string(event.Type))
 	}
 
 	switch event.Type {

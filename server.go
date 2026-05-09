@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
-	"log"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 	"github.com/ricehub-io/payments/internal/db"
+	"github.com/ricehub-io/payments/internal/logging"
 	"github.com/ricehub-io/payments/internal/polar"
 	paymentv1 "github.com/ricehub-io/proto/gen/go/payment/v1"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -30,6 +32,8 @@ func (s *paymentServer) CreateCheckout(
 	ctx context.Context,
 	req *paymentv1.CreateCheckoutRequest,
 ) (*paymentv1.CreateCheckoutResponse, error) {
+	logger := logging.LoggerFromContext(ctx, zap.L())
+
 	userID, err := uuid.Parse(req.UserId)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "user_id must be a valid uuid")
@@ -38,10 +42,15 @@ func (s *paymentServer) CreateCheckout(
 		return nil, status.Error(codes.InvalidArgument, "product_id must be a valid uuid")
 	}
 
+	if hub := sentry.GetHubFromContext(ctx); hub != nil {
+		hub.Scope().SetUser(sentry.User{ID: req.UserId})
+		hub.Scope().SetTag("product_id", req.ProductId)
+	}
+
 	hasSub, err := s.db.HasUserSubscription(ctx, userID)
 	if err != nil {
-		log.Printf("could not check if user has subscription: %v", err)
-		return nil, status.Error(codes.Internal, "internal database error")
+		logger.Error("Could not check if user has subscription", zap.Error(err))
+		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
 	if hasSub {
@@ -50,6 +59,7 @@ func (s *paymentServer) CreateCheckout(
 
 	url, err := s.polar.CreateCheckoutSession(ctx, req.UserId, req.ProductId)
 	if err != nil {
+		logger.Error("Could not create a checkout session", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "could not create checkout session: %v", err)
 	}
 

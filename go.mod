@@ -3,6 +3,9 @@ module github.com/ricehub-io/payments
 go 1.26.3
 
 require (
+	github.com/TheZeroSlave/zapsentry v1.24.0
+	github.com/getsentry/sentry-go v0.46.2
+	github.com/getsentry/sentry-go/gin v0.46.2
 	github.com/google/uuid v1.6.0
 	github.com/ricehub-io/proto v0.3.0
 	go.uber.org/zap v1.28.0

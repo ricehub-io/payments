@@ -1,36 +1,41 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"log"
 	"net"
-	"os"
-	"time"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/ricehub-io/payments/internal/config"
 	"github.com/ricehub-io/payments/internal/db"
+	"github.com/ricehub-io/payments/internal/logging"
 	"github.com/ricehub-io/payments/internal/polar"
 	paymentv1 "github.com/ricehub-io/proto/gen/go/payment/v1"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
 func main() {
-	logger := initZap(zap.InfoLevel)
-	defer func() { _ = logger.Sync() }()
+	cfg, err := config.NewConfig()
+	if err != nil {
+		log.Fatalf("Could not create a new config: %v", err)
+	}
 
-	if err := run(logger); err != nil {
-		logger.Fatal("run failed", zap.Error(err))
+	logger, err := logging.Init(zap.InfoLevel, cfg.Environment == "prod", cfg.SentryDSN)
+	if err != nil {
+		log.Fatalf("Could not initialize logging: %v", err)
+	}
+	defer logging.Sync()
+
+	if err := run(cfg, logger); err != nil {
+		logger.Fatal("Run failed", zap.Error(err))
 	}
 }
 
-func run(logger *zap.Logger) error {
-	cfg, err := config.NewConfig()
-	if err != nil {
-		return fmt.Errorf("new config: %w", err)
+func run(cfg *config.Config, logger *zap.Logger) error {
+	isProd := cfg.Environment == "prod"
+	if !isProd {
+		logger.Warn("Running in development environment!")
 	}
 
 	db, err := db.NewDatabase(cfg.DatabaseURL)
@@ -49,77 +54,22 @@ func run(logger *zap.Logger) error {
 		return fmt.Errorf("net listen: %w", err)
 	}
 
-	logOpts := []logging.Option{
-		logging.WithLogOnEvents(logging.StartCall, logging.FinishCall),
-	}
-
 	paymentServer := NewPaymentServer(db, polar)
 	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
-		logging.UnaryServerInterceptor(interceptorLogger(logger), logOpts...),
+		logging.ZapUnaryServerInterceptor(logger),
+		logging.SentryUnaryServerInterceptor(logger),
 	))
 	paymentv1.RegisterPaymentServiceServer(grpcServer, paymentServer)
 
-	if cfg.Reflection {
-		logger.Warn("Server reflection is enabled!")
+	if !isProd {
+		logger.Info("Server reflection enabled")
 		reflection.Register(grpcServer)
 	}
 
-	logger.Info("gRPC server ready!", zap.String("address", "127.0.0.1"+port))
+	logger.Sugar().Infof("gRPC server available at http://127.0.0.1%s", port)
 	if err := grpcServer.Serve(lis); err != nil {
 		return fmt.Errorf("grpc serve: %w", err)
 	}
 
 	return nil
-}
-
-func initZap(logLevel zapcore.LevelEnabler) *zap.Logger {
-	encodeCfg := zap.NewDevelopmentEncoderConfig()
-	encodeCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	encodeCfg.EncodeTime = func(t time.Time, pae zapcore.PrimitiveArrayEncoder) {
-		pae.AppendString(t.Format("2006/01/02 15:04:05"))
-	}
-
-	consoleEncoder := zapcore.NewConsoleEncoder(encodeCfg)
-	core := zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), logLevel)
-
-	logger := zap.New(core)
-	zap.ReplaceGlobals(logger)
-
-	return logger
-}
-
-func interceptorLogger(l *zap.Logger) logging.Logger {
-	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
-		f := make([]zap.Field, 0, len(fields)/2)
-		for i := 0; i < len(fields); i += 2 {
-			key := fields[i]
-			value := fields[i+1]
-
-			switch v := value.(type) {
-			case string:
-				f = append(f, zap.String(key.(string), v))
-			case int:
-				f = append(f, zap.Int(key.(string), v))
-			case bool:
-				f = append(f, zap.Bool(key.(string), v))
-			default:
-				f = append(f, zap.Any(key.(string), v))
-			}
-		}
-
-		logger := l.WithOptions(zap.AddCallerSkip(1)).With(f...)
-
-		switch lvl {
-		case logging.LevelDebug:
-			logger.Debug(msg)
-		case logging.LevelInfo:
-			logger.Info(msg)
-		case logging.LevelWarn:
-			logger.Warn(msg)
-		case logging.LevelError:
-			logger.Error(msg)
-		default:
-			l.Sugar().Errorf("Unknown log level: %v", lvl)
-		}
-	})
 }

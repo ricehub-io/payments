@@ -13,12 +13,22 @@ type Database struct {
 }
 
 func NewDatabase(connUrl string) (*Database, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	pool, err := pgxpool.New(ctx, connUrl)
 	if err != nil {
 		return nil, fmt.Errorf("pgxpool new: %w", err)
+	}
+
+	// test query
+	var two uint
+	err = pool.QueryRow(ctx, "SELECT 2").Scan(&two)
+	if err != nil {
+		return nil, fmt.Errorf("test query scan: %w", err)
+	}
+	if two != 2 {
+		return nil, fmt.Errorf("invalid test query result: got %d, expected 2", two)
 	}
 
 	return &Database{pool}, nil
@@ -27,28 +37,3 @@ func NewDatabase(connUrl string) (*Database, error) {
 func (d *Database) Close() {
 	d.pool.Close()
 }
-
-// -- HELPERS --
-// type DBExecutor interface {
-// 	Exec(ctx context.Context, sql string, arguments ...any) (commandTag pgconn.CommandTag, err error)
-// 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-// 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-// }
-
-// func rowToStruct[T any](ctx context.Context, exec DBExecutor, query string, args ...any) (res T, err error) {
-// 	rows, err := exec.Query(ctx, query, args...)
-// 	if err != nil {
-// 		return res, err
-// 	}
-
-// 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[T])
-// }
-
-// func rowsToStruct[T any](ctx context.Context, exec DBExecutor, query string, args ...any) (res []T, err error) {
-// 	rows, err := exec.Query(ctx, query, args...)
-// 	if err != nil {
-// 		return res, err
-// 	}
-
-// 	return pgx.CollectRows(rows, pgx.RowToStructByName[T])
-// }

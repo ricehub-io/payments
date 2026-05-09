@@ -2,18 +2,19 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 
 	"github.com/joho/godotenv"
-	"go.uber.org/zap"
 )
 
 type Config struct {
+	Environment        string
 	Port               uint16
-	Reflection         bool
 	WebhookPort        uint16
 	DatabaseURL        string
+	SentryDSN          string
 	PolarSandbox       bool
 	PolarToken         string
 	PolarWebhookSecret string
@@ -27,11 +28,17 @@ func NewConfig() (*Config, error) {
 		return nil, fmt.Errorf("godotenv load: %w", err)
 	}
 
+	env := getOptEnv("ENVIRONMENT", "dev")
+	if env != "dev" && env != "prod" {
+		log.Fatalf("Invalid environment config value '%s', must be dev or prod!", env)
+	}
+
 	return &Config{
+		Environment:        env,
 		Port:               getOptEnvUint16("PORT", "50051"),
-		Reflection:         getOptEnvBool("REFLECTION", "false"),
 		WebhookPort:        getOptEnvUint16("WEBHOOK_PORT", "8080"),
 		DatabaseURL:        getEnv("DATABASE_URL"),
+		SentryDSN:          getOptEnv("SENTRY_DSN", ""),
 		PolarSandbox:       getOptEnvBool("POLAR_SANDBOX", "false"),
 		PolarToken:         getEnv("POLAR_TOKEN"),
 		PolarWebhookSecret: getEnv("POLAR_WEBHOOK_SECRET"),
@@ -44,7 +51,7 @@ func NewConfig() (*Config, error) {
 func getEnv(key string) string {
 	val := os.Getenv(key)
 	if val == "" {
-		zap.L().Sugar().Fatalf("Required config field '%s' is not set", key)
+		log.Fatalf("Required config field '%s' is not set!", key)
 	}
 	return val
 }
@@ -61,11 +68,7 @@ func getOptEnvBool(key, fallback string) bool {
 	valStr := getOptEnv(key, fallback)
 	val, err := strconv.ParseBool(valStr)
 	if err != nil {
-		zap.L().Fatal("Could not parse config value as bool",
-			zap.String("field_name", key),
-			zap.String("field_value", valStr),
-			zap.Error(err),
-		)
+		log.Fatalf("Could not parse config value '%s' as bool: %v", valStr, err)
 	}
 	return val
 }
@@ -74,11 +77,7 @@ func getOptEnvUint16(key, fallback string) uint16 {
 	valStr := getOptEnv(key, fallback)
 	val, err := strconv.ParseUint(valStr, 10, 16)
 	if err != nil {
-		zap.L().Fatal("Could not parse config value as uint16",
-			zap.String("field_name", key),
-			zap.String("field_value", valStr),
-			zap.Error(err),
-		)
+		log.Fatalf("Could not parse config value '%s' as uint16: %v", valStr, err)
 	}
 	return uint16(val)
 }
