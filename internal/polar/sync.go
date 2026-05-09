@@ -19,12 +19,8 @@ func (p *Polar) StartSyncThread() {
 	for {
 		p.logger.Info("Synchronizing...", zap.Int("attempts", attempts))
 		if err := p.sync(); err != nil {
-			retryIn := retryInterval
 			attempts++
-			if attempts >= 3 {
-				retryIn *= time.Duration(attempts - 2)
-			}
-
+			retryIn := retryDelay(attempts)
 			p.logger.Error("Could not synchronize",
 				zap.String("retry_in", retryIn.String()),
 				zap.Error(err),
@@ -46,7 +42,7 @@ func (p *Polar) sync() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	subs, err := p.ListSubscriptions(ctx)
+	subs, err := p.listSubs(ctx)
 	if err != nil {
 		return fmt.Errorf("list subscriptions: %w", err)
 	}
@@ -95,4 +91,11 @@ func (p *Polar) sync() error {
 	p.logger.Sugar().Infof("Marked %d subscriptions expired", expCount)
 
 	return nil
+}
+
+func retryDelay(attempts int) time.Duration {
+	if attempts < 2 {
+		return retryInterval
+	}
+	return retryInterval * time.Duration(attempts-1)
 }

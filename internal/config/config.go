@@ -1,8 +1,8 @@
 package config
 
 import (
+	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 
@@ -21,39 +21,68 @@ type Config struct {
 }
 
 // NewConfig loads .env file and parses it into new config struct.
-// Returns error if file could not be loaded.
-// Exits if any required environment variable is missing or invalid.
+// Returns error if file could not be loaded or parsed into config.
 func NewConfig() (*Config, error) {
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("godotenv load: %w", err)
 	}
 
 	env := getOptEnv("ENVIRONMENT", "dev")
 	if env != "dev" && env != "prod" {
-		log.Fatalf("Invalid environment config value '%s', must be dev or prod!", env)
+		return nil, fmt.Errorf("'ENVIRONMENT' has invalid value '%s', must be 'dev' or 'prod'", env)
+	}
+
+	port, err := getOptEnvUint16("PORT", "50051")
+	if err != nil {
+		return nil, fmt.Errorf("port: %w", err)
+	}
+
+	whPort, err := getOptEnvUint16("WEBHOOK_PORT", "8080")
+	if err != nil {
+		return nil, fmt.Errorf("webhook port: %w", err)
+	}
+
+	dbURL, err := getEnv("DATABASE_URL")
+	if err != nil {
+		return nil, fmt.Errorf("database url: %w", err)
+	}
+
+	polarSandbox, err := getOptEnvBool("POLAR_SANDBOX", "false")
+	if err != nil {
+		return nil, fmt.Errorf("polar sandbox: %w", err)
+	}
+
+	polarToken, err := getEnv("POLAR_TOKEN")
+	if err != nil {
+		return nil, fmt.Errorf("polar token: %w", err)
+	}
+
+	polarWhSecret, err := getEnv("POLAR_WEBHOOK_SECRET")
+	if err != nil {
+		return nil, fmt.Errorf("polar webhook secret: %w", err)
 	}
 
 	return &Config{
 		Environment:        env,
-		Port:               getOptEnvUint16("PORT", "50051"),
-		WebhookPort:        getOptEnvUint16("WEBHOOK_PORT", "8080"),
-		DatabaseURL:        getEnv("DATABASE_URL"),
+		Port:               port,
+		WebhookPort:        whPort,
+		DatabaseURL:        dbURL,
 		SentryDSN:          getOptEnv("SENTRY_DSN", ""),
-		PolarSandbox:       getOptEnvBool("POLAR_SANDBOX", "false"),
-		PolarToken:         getEnv("POLAR_TOKEN"),
-		PolarWebhookSecret: getEnv("POLAR_WEBHOOK_SECRET"),
+		PolarSandbox:       polarSandbox,
+		PolarToken:         polarToken,
+		PolarWebhookSecret: polarWhSecret,
 	}, nil
 }
 
 // getEnv fetches given environment variable, exiting if it's not set.
 //
 // Use it to get environment variables that are required and can't have a default value.
-func getEnv(key string) string {
+func getEnv(key string) (string, error) {
 	val := os.Getenv(key)
 	if val == "" {
-		log.Fatalf("Required config field '%s' is not set!", key)
+		return "", fmt.Errorf("required config field '%s' is not set", key)
 	}
-	return val
+	return val, nil
 }
 
 // getOptEnv fetches an environment variable defaulting to given value if not set.
@@ -64,20 +93,20 @@ func getOptEnv(key, fallback string) string {
 	return fallback
 }
 
-func getOptEnvBool(key, fallback string) bool {
+func getOptEnvBool(key, fallback string) (bool, error) {
 	valStr := getOptEnv(key, fallback)
 	val, err := strconv.ParseBool(valStr)
 	if err != nil {
-		log.Fatalf("Could not parse config value '%s' as bool: %v", valStr, err)
+		return false, fmt.Errorf("could not parse value '%s' as bool: %w", valStr, err)
 	}
-	return val
+	return val, nil
 }
 
-func getOptEnvUint16(key, fallback string) uint16 {
+func getOptEnvUint16(key, fallback string) (uint16, error) {
 	valStr := getOptEnv(key, fallback)
 	val, err := strconv.ParseUint(valStr, 10, 16)
 	if err != nil {
-		log.Fatalf("Could not parse config value '%s' as uint16: %v", valStr, err)
+		return 0, fmt.Errorf("could not parse value '%s' as uint16: %w", valStr, err)
 	}
-	return uint16(val)
+	return uint16(val), nil
 }

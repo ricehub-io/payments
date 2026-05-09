@@ -25,32 +25,16 @@ type webhookEvent struct {
 }
 
 func (p *Polar) StartWebhookHandler() {
-	if err := p.setupGin(); err != nil {
+	if err := p.startGin(); err != nil {
 		p.logger.Error("Could not start webhook handler", zap.Error(err))
 	}
 }
 
-func (p *Polar) setupGin() error {
-	isProd := p.cfg.Environment == "prod"
-
-	if isProd {
-		gin.SetMode(gin.ReleaseMode)
+func (p *Polar) startGin() error {
+	r, err := p.newRouter(p.cfg.Environment == "prod")
+	if err != nil {
+		return fmt.Errorf("new router: %w", err)
 	}
-
-	r := gin.New()
-	if err := r.SetTrustedProxies(nil); err != nil {
-		return fmt.Errorf("gin set trusted proxies: %w", err)
-	}
-
-	r.Use(
-		ginzap.RecoveryWithZap(p.logger, true),
-		ginzap.Ginzap(p.logger, time.RFC3339, true),
-	)
-	if isProd {
-		r.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
-	}
-
-	r.POST("/webhook", p.handleWebhookEvent)
 
 	portStr := fmt.Sprintf(":%d", p.cfg.WebhookPort)
 	p.logger.Sugar().Infof("HTTP webhook handler available at http://127.0.0.1" + portStr)
@@ -59,6 +43,29 @@ func (p *Polar) setupGin() error {
 	}
 
 	return nil
+}
+
+func (p *Polar) newRouter(prod bool) (*gin.Engine, error) {
+	if prod {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	r := gin.New()
+	if err := r.SetTrustedProxies(nil); err != nil {
+		return nil, fmt.Errorf("set trusted proxies: %w", err)
+	}
+
+	r.Use(
+		ginzap.RecoveryWithZap(p.logger, true),
+		ginzap.Ginzap(p.logger, time.RFC3339, true),
+	)
+	if prod {
+		r.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
+	}
+
+	r.POST("/webhook", p.handleWebhookEvent)
+
+	return r, nil
 }
 
 func (p *Polar) handleWebhookEvent(c *gin.Context) {

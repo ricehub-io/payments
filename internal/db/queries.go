@@ -34,10 +34,8 @@ func (d *Database) HasUserSubscription(
 	SELECT EXISTS (
 		SELECT 1
 		FROM subscriptions
-		WHERE
-			user_id = $1 AND
-			status = 'active' OR
-			(status = 'canceled' AND current_period_end > now())
+		WHERE user_id = $1 AND
+			(status = 'active' OR (status = 'canceled' AND current_period_end > now()))
 	)
 	`
 	err = d.pool.QueryRow(ctx, query, userID).Scan(&has)

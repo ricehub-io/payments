@@ -5,26 +5,32 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
-	"github.com/ricehub-io/payments/internal/db"
 	"github.com/ricehub-io/payments/internal/logging"
-	"github.com/ricehub-io/payments/internal/polar"
 	paymentv1 "github.com/ricehub-io/proto/gen/go/payment/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+type subscriptionStore interface {
+	HasUserSubscription(ctx context.Context, userID uuid.UUID) (bool, error)
+}
+
+type checkoutCreator interface {
+	CreateCheckoutSession(ctx context.Context, userID, productID string) (string, error)
+}
+
 type PaymentServiceServer struct {
 	paymentv1.UnimplementedPaymentServiceServer
 	logger *zap.Logger
-	db     *db.Database
-	polar  *polar.Polar
+	db     subscriptionStore
+	polar  checkoutCreator
 }
 
 func NewPaymentServiceServer(
 	logger *zap.Logger,
-	db *db.Database,
-	polar *polar.Polar,
+	db subscriptionStore,
+	polar checkoutCreator,
 ) *PaymentServiceServer {
 	return &PaymentServiceServer{
 		paymentv1.UnimplementedPaymentServiceServer{},
@@ -58,7 +64,7 @@ func (s *PaymentServiceServer) CreateCheckout(
 	}
 
 	if hasSub {
-		return nil, status.Error(codes.AlreadyExists, "user has an already active subscription")
+		return nil, status.Error(codes.AlreadyExists, "user already has an active subscription")
 	}
 
 	url, err := s.polar.CreateCheckoutSession(ctx, req.UserId, req.ProductId)

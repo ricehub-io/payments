@@ -5,7 +5,7 @@ CMD         := .
 GOFLAGS := -trimpath
 LDFLAGS := -ldflags="-s -w"
 
-.PHONY: build run check test lint fmt vet security install-tools
+.PHONY: build run check test test-integration lint fmt vet security install-tools
 
 ## build: compile the source code
 build:
@@ -22,6 +22,10 @@ check: fmt vet lint security test
 ## test: run all tests with race detector
 test:
 	go test ./... -v -race -count=1
+
+## test-integration: run unit and integration tests (requires Docker)
+test-integration:
+	go test -tags=integration ./... -v -race -count=1
 
 ## lint: run golangci-lint
 lint:
