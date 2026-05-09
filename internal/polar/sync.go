@@ -3,19 +3,40 @@ package polar
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+)
+
+const (
+	syncInterval  = 24 * time.Hour
+	retryInterval = 10 * time.Minute
 )
 
 func (p *Polar) StartSyncThread() {
+	logger := zap.L()
+
+	attempts := 0
 	for {
-		log.Println("Syncing...")
+		logger.Info("Synchronizing...", zap.Int("attempts", attempts))
 		if err := p.sync(); err != nil {
-			log.Printf("[ERROR] Polar sync failed: %v", err)
+			retryIn := retryInterval
+			attempts++
+			if attempts >= 3 {
+				retryIn *= time.Duration(attempts - 2)
+			}
+
+			logger.Error("Could not synchronize",
+				zap.String("retry_in", retryIn.String()),
+				zap.Error(err),
+			)
+			time.Sleep(retryIn)
+			continue
 		}
-		time.Sleep(24 * time.Hour)
+		attempts = 0
+		logger.Info("Successfully synchronized", zap.String("sync_in", syncInterval.String()))
+		time.Sleep(syncInterval)
 	}
 }
 
@@ -24,6 +45,8 @@ func (p *Polar) StartSyncThread() {
 // and upserting them into database. All rows (subscriptions) that were not
 // upserted are marked as expired.
 func (p *Polar) sync() error {
+	logger := zap.L()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
@@ -46,7 +69,10 @@ func (p *Polar) sync() error {
 
 		userID, err := uuid.Parse(*userIDStr)
 		if err != nil {
-			log.Printf("[WARNING] Could not parse external ID: %v", err)
+			logger.Warn("Could not parse external customer ID",
+				zap.Stringp("id", userIDStr),
+				zap.Error(err),
+			)
 			continue
 		}
 		seen = append(seen, userID)
@@ -54,7 +80,11 @@ func (p *Polar) sync() error {
 		if err := p.db.InsertSubscription(
 			ctx, userID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd,
 		); err != nil {
-			log.Printf("[ERROR] Could not insert subscription: %v", err)
+			logger.Error("Could not insert subscription into database",
+				zap.String("sub_id", sub.ID),
+				zap.Stringp("user_id", userIDStr),
+				zap.Error(err),
+			)
 			continue
 		}
 	}
@@ -62,11 +92,11 @@ func (p *Polar) sync() error {
 	// mark unseen as expired
 	expCount, err := p.db.UpdateSubscriptionExpiredExcept(ctx, seen)
 	if err != nil {
-		log.Printf("[ERROR] Could not mark subscriptions as expired: %v", err)
+		logger.Error("Could not mark subscriptions as expired", zap.Error(err))
 	}
 
-	log.Printf("Upserted %d subscriptions", len(seen))
-	log.Printf("Marked %d subscriptions as expired", expCount)
+	logger.Sugar().Infof("Upserted %d subscriptions", len(seen))
+	logger.Sugar().Infof("Marked %d subscriptions expired", expCount)
 
 	return nil
 }

@@ -5,13 +5,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
+	"time"
 
+	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/polarsource/polar-go/models/components"
 	svix "github.com/svix/svix-webhooks/go"
+	"go.uber.org/zap"
 )
 
 type webhookEvent struct {
@@ -19,16 +21,25 @@ type webhookEvent struct {
 	Data json.RawMessage             `json:"data"`
 }
 
-func (p *Polar) StartWebhookHandler() error {
-	r := gin.Default()
+func (p *Polar) StartWebhookHandler() {
+	if err := p.setupGin(); err != nil {
+		zap.L().Error("Could not start webhook handler", zap.Error(err))
+	}
+}
+
+func (p *Polar) setupGin() error {
+	logger := zap.L()
+
+	r := gin.New()
 	if err := r.SetTrustedProxies(nil); err != nil {
 		return fmt.Errorf("gin set trusted proxies: %w", err)
 	}
+	r.Use(ginzap.RecoveryWithZap(logger, true), ginzap.Ginzap(logger, time.RFC3339, true))
 
 	r.POST("/webhook", p.handleWebhookEvent)
 
 	portStr := fmt.Sprintf(":%d", p.cfg.WebhookPort)
-	log.Println("Webhook handler available at http://127.0.0.1" + portStr)
+	logger.Sugar().Infof("HTTP webhook handler available at http://127.0.0.1" + portStr)
 	if err := r.Run(portStr); err != nil {
 		return fmt.Errorf("router run: %w", err)
 	}
@@ -37,9 +48,11 @@ func (p *Polar) StartWebhookHandler() error {
 }
 
 func (p *Polar) handleWebhookEvent(c *gin.Context) {
+	logger := zap.L()
+
 	bytes, err := c.GetRawData()
 	if err != nil {
-		log.Printf("could not read webhook body: %v", err)
+		logger.Error("Could not read webhook body", zap.Error(err))
 		c.String(http.StatusBadRequest, "error reading request body: %v", err)
 		return
 	}
@@ -66,7 +79,7 @@ func (p *Polar) handleWebhookEvent(c *gin.Context) {
 	}
 
 	if err := p.processWebhookEvent(c.Request.Context(), webhookID, bytes); err != nil {
-		log.Printf("could not process webhook event: %v", err)
+		logger.Error("Could not process webhook event", zap.Error(err))
 		c.String(http.StatusInternalServerError, "could not process webhook event")
 		return
 	}
@@ -79,6 +92,8 @@ func (p *Polar) processWebhookEvent(
 	webhookID string,
 	body []byte,
 ) error {
+	logger := zap.L()
+
 	var event webhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		return fmt.Errorf("body unmarshal json: %w", err)
@@ -87,24 +102,22 @@ func (p *Polar) processWebhookEvent(
 	switch event.Type {
 	case components.WebhookEventTypeSubscriptionActive:
 		if err := p.db.InsertWebhookEvent(ctx, webhookID, string(event.Type), event.Data); err != nil {
-			log.Printf("could not insert webhook event log: %v", err)
+			logger.Error("Could not insert webhook event log", zap.Error(err))
 		}
 
 		if err := p.handleSubscriptionActive(ctx, event.Data); err != nil {
 			if dbErr := p.db.UpdateWebhookEventError(ctx, webhookID, err.Error()); dbErr != nil {
-				log.Printf("could not set webhook event error message: %v", dbErr)
+				logger.Error("Could not update webhook event error", zap.Error(dbErr))
 			}
 
 			return fmt.Errorf("handle subscription active: %w", err)
 		}
 
 		if err := p.db.UpdateWebhookEventProcessed(ctx, webhookID); err != nil {
-			log.Printf("could not set webhook event as processed: %v", err)
+			logger.Error("Could not update webhook event as processed", zap.Error(err))
 		}
-	case components.WebhookEventTypeOrderPaid:
-		// TODO
 	default:
-		log.Printf("[WARNING] Received webhook event with unsupported type: %v", event.Type)
+		logger.Warn("Received unhandled webhook event", zap.String("type", string(event.Type)))
 	}
 
 	return nil
@@ -135,7 +148,7 @@ func (p *Polar) handleSubscriptionActive(ctx context.Context, rawPayload json.Ra
 		return fmt.Errorf("insert subscription: %w", err)
 	}
 
-	log.Printf("New user subscription inserted: %v", payload)
+	zap.L().Info("Inserted new subscription to database", zap.Stringp("user_id", userIDStr))
 
 	return nil
 }

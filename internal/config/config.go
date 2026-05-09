@@ -2,11 +2,11 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 
 	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 )
 
 type Config struct {
@@ -44,7 +44,7 @@ func NewConfig() (*Config, error) {
 func getEnv(key string) string {
 	val := os.Getenv(key)
 	if val == "" {
-		log.Fatalf("required environment variable %s is not set", key)
+		zap.L().Sugar().Fatalf("Required config field '%s' is not set", key)
 	}
 	return val
 }
@@ -61,7 +61,11 @@ func getOptEnvBool(key, fallback string) bool {
 	valStr := getOptEnv(key, fallback)
 	val, err := strconv.ParseBool(valStr)
 	if err != nil {
-		log.Fatalf("could not parse '%s' as bool: %v", valStr, err)
+		zap.L().Fatal("Could not parse config value as bool",
+			zap.String("field_name", key),
+			zap.String("field_value", valStr),
+			zap.Error(err),
+		)
 	}
 	return val
 }
@@ -70,7 +74,11 @@ func getOptEnvUint16(key, fallback string) uint16 {
 	valStr := getOptEnv(key, fallback)
 	val, err := strconv.ParseUint(valStr, 10, 16)
 	if err != nil {
-		log.Fatalf("could not parse '%s' as uint16: %v", valStr, err)
+		zap.L().Fatal("Could not parse config value as uint16",
+			zap.String("field_name", key),
+			zap.String("field_value", valStr),
+			zap.Error(err),
+		)
 	}
 	return uint16(val)
 }
