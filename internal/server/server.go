@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -14,25 +14,29 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type paymentServer struct {
+type PaymentServiceServer struct {
 	paymentv1.UnimplementedPaymentServiceServer
-	db    *db.Database
-	polar *polar.Polar
+	logger *zap.Logger
+	db     *db.Database
+	polar  *polar.Polar
 }
 
-func NewPaymentServer(db *db.Database, polar *polar.Polar) *paymentServer {
-	return &paymentServer{
+func NewPaymentServiceServer(
+	logger *zap.Logger,
+	db *db.Database,
+	polar *polar.Polar,
+) *PaymentServiceServer {
+	return &PaymentServiceServer{
 		paymentv1.UnimplementedPaymentServiceServer{},
-		db,
-		polar,
+		logger, db, polar,
 	}
 }
 
-func (s *paymentServer) CreateCheckout(
+func (s *PaymentServiceServer) CreateCheckout(
 	ctx context.Context,
 	req *paymentv1.CreateCheckoutRequest,
 ) (*paymentv1.CreateCheckoutResponse, error) {
-	logger := logging.LoggerFromContext(ctx, zap.L())
+	logger := logging.LoggerFromContext(ctx, s.logger)
 
 	userID, err := uuid.Parse(req.UserId)
 	if err != nil {

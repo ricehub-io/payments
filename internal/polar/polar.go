@@ -8,19 +8,24 @@ import (
 )
 
 type Polar struct {
-	cfg *config.Config
-	db  *db.Database
-	sdk *polargo.Polar
+	logger *zap.Logger
+	cfg    *config.Config
+	db     *db.Database
+	sdk    *polargo.Polar
 }
 
-func NewPolar(cfg *config.Config, db *db.Database) *Polar {
+func NewPolar(
+	logger *zap.Logger,
+	cfg *config.Config,
+	db *db.Database,
+) *Polar {
 	opts := []polargo.SDKOption{polargo.WithSecurity(cfg.PolarToken)}
 	if cfg.PolarSandbox {
 		opts = append(opts, polargo.WithServer(polargo.ServerSandbox))
-		zap.L().Warn("Using Polar in sandbox mode!")
+		logger.Warn("Using Polar in sandbox mode!")
 	}
 
 	sdk := polargo.New(opts...)
 
-	return &Polar{cfg, db, sdk}
+	return &Polar{logger, cfg, db, sdk}
 }

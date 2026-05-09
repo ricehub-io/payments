@@ -9,6 +9,7 @@ import (
 	"github.com/ricehub-io/payments/internal/db"
 	"github.com/ricehub-io/payments/internal/logging"
 	"github.com/ricehub-io/payments/internal/polar"
+	"github.com/ricehub-io/payments/internal/server"
 	paymentv1 "github.com/ricehub-io/proto/gen/go/payment/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -25,7 +26,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Could not initialize logging: %v", err)
 	}
-	defer logging.Sync()
+	defer logging.Sync(logger)
 
 	if err := run(cfg, logger); err != nil {
 		logger.Fatal("Run failed", zap.Error(err))
@@ -44,7 +45,7 @@ func run(cfg *config.Config, logger *zap.Logger) error {
 	}
 	defer db.Close()
 
-	polar := polar.NewPolar(cfg, db)
+	polar := polar.NewPolar(logger, cfg, db)
 	go polar.StartWebhookHandler()
 	go polar.StartSyncThread()
 
@@ -54,7 +55,7 @@ func run(cfg *config.Config, logger *zap.Logger) error {
 		return fmt.Errorf("net listen: %w", err)
 	}
 
-	paymentServer := NewPaymentServer(db, polar)
+	paymentServer := server.NewPaymentServiceServer(logger, db, polar)
 	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
 		logging.ZapUnaryServerInterceptor(logger),
 		logging.SentryUnaryServerInterceptor(logger),

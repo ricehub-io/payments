@@ -26,12 +26,11 @@ type webhookEvent struct {
 
 func (p *Polar) StartWebhookHandler() {
 	if err := p.setupGin(); err != nil {
-		zap.L().Error("Could not start webhook handler", zap.Error(err))
+		p.logger.Error("Could not start webhook handler", zap.Error(err))
 	}
 }
 
 func (p *Polar) setupGin() error {
-	logger := zap.L()
 	isProd := p.cfg.Environment == "prod"
 
 	if isProd {
@@ -44,8 +43,8 @@ func (p *Polar) setupGin() error {
 	}
 
 	r.Use(
-		ginzap.RecoveryWithZap(logger, true),
-		ginzap.Ginzap(logger, time.RFC3339, true),
+		ginzap.RecoveryWithZap(p.logger, true),
+		ginzap.Ginzap(p.logger, time.RFC3339, true),
 	)
 	if isProd {
 		r.Use(sentrygin.New(sentrygin.Options{Repanic: true}))
@@ -54,7 +53,7 @@ func (p *Polar) setupGin() error {
 	r.POST("/webhook", p.handleWebhookEvent)
 
 	portStr := fmt.Sprintf(":%d", p.cfg.WebhookPort)
-	logger.Sugar().Infof("HTTP webhook handler available at http://127.0.0.1" + portStr)
+	p.logger.Sugar().Infof("HTTP webhook handler available at http://127.0.0.1" + portStr)
 	if err := r.Run(portStr); err != nil {
 		return fmt.Errorf("router run: %w", err)
 	}
@@ -63,7 +62,7 @@ func (p *Polar) setupGin() error {
 }
 
 func (p *Polar) handleWebhookEvent(c *gin.Context) {
-	logger := logging.LoggerFromContext(c.Request.Context(), zap.L())
+	logger := logging.LoggerFromContext(c.Request.Context(), p.logger)
 
 	bytes, err := c.GetRawData()
 	if err != nil {
@@ -127,7 +126,7 @@ func (p *Polar) processWebhookEvent(
 			logger.Error("Could not insert webhook event log", zap.Error(err))
 		}
 
-		if err := p.handleSubscriptionActive(ctx, event.Data); err != nil {
+		if err := p.handleSubscriptionActive(ctx, logger, event.Data); err != nil {
 			if dbErr := p.db.UpdateWebhookEventError(ctx, webhookID, err.Error()); dbErr != nil {
 				logger.Error("Could not update webhook event error", zap.Error(dbErr))
 			}
@@ -145,7 +144,11 @@ func (p *Polar) processWebhookEvent(
 	return nil
 }
 
-func (p *Polar) handleSubscriptionActive(ctx context.Context, rawPayload json.RawMessage) error {
+func (p *Polar) handleSubscriptionActive(
+	ctx context.Context,
+	logger *zap.Logger,
+	rawPayload json.RawMessage,
+) error {
 	var payload components.Subscription
 	if err := payload.UnmarshalJSON(rawPayload); err != nil {
 		return fmt.Errorf("payload unmarshal json: %w", err)
@@ -170,7 +173,7 @@ func (p *Polar) handleSubscriptionActive(ctx context.Context, rawPayload json.Ra
 		return fmt.Errorf("insert subscription: %w", err)
 	}
 
-	zap.L().Info("Inserted new subscription to database", zap.Stringp("user_id", userIDStr))
+	logger.Info("Inserted new subscription to database", zap.Stringp("user_id", userIDStr))
 
 	return nil
 }

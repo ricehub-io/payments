@@ -61,12 +61,12 @@ func Init(
 		return logger, nil
 	}
 
-	zap.ReplaceGlobals(base)
+	// zap.ReplaceGlobals(base)
 	return base, nil
 }
 
-func Sync() {
-	_ = zap.L().Sync()
+func Sync(l *zap.Logger) {
+	_ = l.Sync()
 	sentry.Flush(5 * time.Second)
 }
 
