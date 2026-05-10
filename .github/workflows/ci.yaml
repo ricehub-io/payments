@@ -77,9 +77,9 @@ jobs:
           govulncheck ./...
 
       - name: Run gosec
-        uses: securego/gosec@master
-        with:
-          args: ./...
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1
+          gosec -exclude-generated ./...
 
   test:
     needs: setup

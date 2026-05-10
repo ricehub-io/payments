@@ -1,0 +1,12 @@
+version: "2"
+
+linters:
+  exclusions:
+    presets:
+      - common-false-positives
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - dupl
