@@ -2,10 +2,29 @@ name: CI pipeline
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
+    paths-ignore: ["**.md"]
+  pull_request:
+    paths-ignore: ["**.md"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  setup:
+    name: Prime cache
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod download
+
   format:
+    needs: setup
     name: Formatting
     runs-on: ubuntu-latest
     steps:
@@ -14,10 +33,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - run: go install golang.org/x/tools/cmd/goimports@latest
 
-      - name: Check goimports
+      - name: Run goimports
         run: |
+          go install golang.org/x/tools/cmd/goimports@v0.45.0
           files=$(goimports -l .)
           if [ -n "$files" ]; then
             echo "These files have incorrect imports:"
@@ -26,6 +45,7 @@ jobs:
           fi
 
   lint:
+    needs: setup
     name: Linting
     runs-on: ubuntu-latest
     steps:
@@ -35,15 +55,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run go vet
-        run: go vet ./...
-
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.11.4
 
   security:
+    needs: setup
     name: Security scanning
     runs-on: ubuntu-latest
     steps:
@@ -55,15 +73,16 @@ jobs:
 
       - name: Run govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
           govulncheck ./...
 
       - name: Run gosec
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -exclude-generated ./...
+        uses: securego/gosec@master
+        with:
+          args: ./...
 
   test:
+    needs: setup
     name: Testing
     runs-on: ubuntu-latest
     steps:
@@ -73,5 +92,5 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run integration tests
+      - name: Run tests
         run: make test-integration

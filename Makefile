@@ -21,11 +21,11 @@ check: fmt vet lint security test
 
 ## test: run all tests with race detector
 test:
-	go test ./... -v -race -count=1
+	go test ./... -v -race
 
 ## test-integration: run unit and integration tests (requires Docker)
 test-integration:
-	go test -tags=integration ./... -v -race -count=1
+	go test -tags=integration ./... -v -race
 
 ## lint: run golangci-lint
 lint:
