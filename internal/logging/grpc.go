@@ -50,7 +50,7 @@ func SentryUnaryServerInterceptor(baseLogger *zap.Logger) grpc.UnaryServerInterc
 			hub.CaptureException(err)
 		}
 
-		return
+		return resp, err
 	}
 }
 
@@ -74,7 +74,12 @@ func NewScopedLogger(base *zap.Logger, hub *sentry.Hub) *zap.Logger {
 
 // -- HELPERS --
 func interceptorLogger(l *zap.Logger) extLogging.Logger {
-	return extLogging.LoggerFunc(func(ctx context.Context, lvl extLogging.Level, msg string, fields ...any) {
+	return extLogging.LoggerFunc(func(
+		_ context.Context,
+		lvl extLogging.Level,
+		msg string,
+		fields ...any,
+	) {
 		f := make([]zap.Field, 0, len(fields)/2)
 		for i := 0; i < len(fields); i += 2 {
 			key := fields[i]

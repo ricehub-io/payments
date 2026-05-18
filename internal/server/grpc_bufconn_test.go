@@ -20,7 +20,11 @@ import (
 
 const bufSize = 1024 * 1024
 
-func newBufconnServer(t *testing.T, db subscriptionStore, polar checkoutCreator) paymentv1.PaymentServiceClient {
+func newBufconnServer(
+	t *testing.T,
+	db subscriptionStore,
+	polar checkoutCreator,
+) paymentv1.PaymentServiceClient {
 	t.Helper()
 	lis := bufconn.Listen(bufSize)
 

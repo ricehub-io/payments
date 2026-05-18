@@ -1,12 +1,76 @@
 version: "2"
 
 linters:
+  default: none
+  enable:
+    - asciicheck
+    - bodyclose
+    - dogsled
+    - dupl
+    - errcheck
+    - errorlint
+    - exhaustive
+    - funlen
+    - goconst
+    - gocritic
+    - gocyclo
+    - goheader
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - nestif
+    - noctx
+    - nolintlint
+    - prealloc
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+  settings:
+    exhaustive:
+      check:
+        - map
+        - switch
+      default-signifies-exhaustive: true
   exclusions:
     presets:
+      - comments
       - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
       - path: _test\.go
         linters:
-          - errcheck
           - gosec
-          - dupl
+          - noctx
+
+formatters:
+  enable:
+    - goimports
+    - gofumpt
+    - golines
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/ricehub-io/payments
+    gofumpt:
+      module-path: github.com/ricehub-io/payments
+      extra-rules: true
+    golines:
+      max-len: 100
+      shorten-comments: true
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  build-tags:
+    - integration

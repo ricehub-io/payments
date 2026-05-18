@@ -12,16 +12,15 @@ type Database struct {
 	pool *pgxpool.Pool
 }
 
-func NewDatabase(connUrl string) (*Database, error) {
+func NewDatabase(connURL string) (*Database, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, connUrl)
+	pool, err := pgxpool.New(ctx, connURL)
 	if err != nil {
 		return nil, fmt.Errorf("pgxpool new: %w", err)
 	}
 
-	// test query
 	var two uint
 	err = pool.QueryRow(ctx, "SELECT 2").Scan(&two)
 	if err != nil {

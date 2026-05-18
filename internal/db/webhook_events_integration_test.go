@@ -24,8 +24,10 @@ func TestInsertWebhookEvent_Inserted(t *testing.T) {
 	var count int
 	var processedAt *time.Time
 	var errCol *string
-	err = testDB.pool.QueryRow(ctx,
-		"SELECT COUNT(*), MAX(processed_at), MAX(error) FROM webhook_events WHERE polar_webhook_id = $1",
+	err = testDB.pool.QueryRow(
+		ctx,
+		`SELECT COUNT(*), MAX(processed_at), MAX(error)
+		FROM webhook_events WHERE polar_webhook_id = $1`,
 		"wh_001",
 	).Scan(&count, &processedAt, &errCol)
 	require.NoError(t, err)
@@ -66,7 +68,10 @@ func TestUpdateWebhookEventError_SetsErrorColumn(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
 
-	require.NoError(t, testDB.InsertWebhookEvent(ctx, "wh_err_test", "subscription.active", json.RawMessage(`{}`)))
+	require.NoError(
+		t,
+		testDB.InsertWebhookEvent(ctx, "wh_err_test", "subscription.active", json.RawMessage(`{}`)),
+	)
 
 	err := testDB.UpdateWebhookEventError(ctx, "wh_err_test", "something went wrong")
 	require.NoError(t, err)
@@ -96,7 +101,9 @@ func TestUpdateWebhookEventProcessed_SetsProcessedAt(t *testing.T) {
 	ctx := context.Background()
 	before := time.Now().UTC()
 
-	require.NoError(t, testDB.InsertWebhookEvent(ctx, "wh_proc", "subscription.active", json.RawMessage(`{}`)))
+	require.NoError(t,
+		testDB.InsertWebhookEvent(ctx, "wh_proc", "subscription.active", json.RawMessage(`{}`)),
+	)
 
 	err := testDB.UpdateWebhookEventProcessed(ctx, "wh_proc")
 	require.NoError(t, err)
@@ -123,7 +130,9 @@ func TestUpdateWebhookEventProcessed_AfterError_BothColumnsSet(t *testing.T) {
 	truncateAll(t)
 	ctx := context.Background()
 
-	require.NoError(t, testDB.InsertWebhookEvent(ctx, "wh_both", "subscription.active", json.RawMessage(`{}`)))
+	require.NoError(t,
+		testDB.InsertWebhookEvent(ctx, "wh_both", "subscription.active", json.RawMessage(`{}`)),
+	)
 	require.NoError(t, testDB.UpdateWebhookEventError(ctx, "wh_both", "error msg"))
 	require.NoError(t, testDB.UpdateWebhookEventProcessed(ctx, "wh_both"))
 

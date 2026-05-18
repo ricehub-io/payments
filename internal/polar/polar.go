@@ -8,14 +8,23 @@ import (
 	"github.com/google/uuid"
 	polargo "github.com/polarsource/polar-go"
 	"github.com/polarsource/polar-go/models/components"
-	"github.com/ricehub-io/payments/internal/config"
 	"go.uber.org/zap"
+
+	"github.com/ricehub-io/payments/internal/config"
 )
 
 type store interface {
-	InsertSubscription(ctx context.Context, userID uuid.UUID, periodStart, periodEnd time.Time) error
+	InsertSubscription(
+		ctx context.Context,
+		userID uuid.UUID,
+		periodStart, periodEnd time.Time,
+	) error
 	UpdateSubscriptionExpiredExcept(ctx context.Context, userIDs []uuid.UUID) (int64, error)
-	InsertWebhookEvent(ctx context.Context, webhookID, eventType string, payload json.RawMessage) error
+	InsertWebhookEvent(
+		ctx context.Context,
+		webhookID, eventType string,
+		payload json.RawMessage,
+	) error
 	UpdateWebhookEventError(ctx context.Context, webhookID, errMsg string) error
 	UpdateWebhookEventProcessed(ctx context.Context, webhookID string) error
 }

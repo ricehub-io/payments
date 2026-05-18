@@ -1,40 +1,46 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
+	"time"
+
+	paymentv1 "github.com/ricehub-io/proto/gen/go/payment/v1"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	"github.com/ricehub-io/payments/internal/config"
 	"github.com/ricehub-io/payments/internal/db"
 	"github.com/ricehub-io/payments/internal/logging"
 	"github.com/ricehub-io/payments/internal/polar"
 	"github.com/ricehub-io/payments/internal/server"
-	paymentv1 "github.com/ricehub-io/proto/gen/go/payment/v1"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 )
 
 func main() {
-	cfg, err := config.NewConfig()
-	if err != nil {
-		log.Fatalf("Could not create a new config: %v", err)
-	}
-
-	logger, err := logging.Init(zap.InfoLevel, cfg.Environment == "prod", cfg.SentryDSN)
-	if err != nil {
-		log.Fatalf("Could not initialize logging: %v", err)
-	}
-	defer logging.Sync(logger)
-
-	if err := run(cfg, logger); err != nil {
-		logger.Fatal("Run failed", zap.Error(err))
+	if err := run(); err != nil {
+		log.Fatalf("Server run failed: %v", err)
 	}
 }
 
-func run(cfg *config.Config, logger *zap.Logger) error {
+func run() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	cfg, err := config.NewConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("new config: %w", err)
+	}
+
 	isProd := cfg.Environment == "prod"
+	logger, err := logging.Init(zap.InfoLevel, isProd, cfg.SentryDSN)
+	if err != nil {
+		return fmt.Errorf("initializing logging: %w", err)
+	}
+	defer logging.Sync(logger)
+
 	if !isProd {
 		logger.Warn("Running in development environment!")
 	}
@@ -49,10 +55,10 @@ func run(cfg *config.Config, logger *zap.Logger) error {
 	go polar.StartWebhookHandler()
 	go polar.StartSyncThread()
 
-	port := fmt.Sprintf(":%d", cfg.Port)
-	lis, err := net.Listen("tcp", port)
+	lisCfg := net.ListenConfig{KeepAlive: 5 * time.Minute}
+	lis, err := lisCfg.Listen(ctx, "tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
-		return fmt.Errorf("net listen: %w", err)
+		return fmt.Errorf("listening on tcp: %w", err)
 	}
 
 	paymentServer := server.NewPaymentServiceServer(logger, db, polar)
@@ -67,9 +73,9 @@ func run(cfg *config.Config, logger *zap.Logger) error {
 		reflection.Register(grpcServer)
 	}
 
-	logger.Sugar().Infof("gRPC server available at http://127.0.0.1%s", port)
+	logger.Sugar().Infof("gRPC server available on %s", lis.Addr())
 	if err := grpcServer.Serve(lis); err != nil {
-		return fmt.Errorf("grpc serve: %w", err)
+		return fmt.Errorf("serving grpc server: %w", err)
 	}
 
 	return nil

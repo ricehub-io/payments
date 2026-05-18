@@ -8,6 +8,7 @@ require (
 	github.com/getsentry/sentry-go/gin v0.46.2
 	github.com/google/uuid v1.6.0
 	github.com/ricehub-io/proto v0.3.0
+	github.com/sethvargo/go-envconfig v1.3.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	go.uber.org/zap v1.28.0

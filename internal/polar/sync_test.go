@@ -183,7 +183,7 @@ type countingStore struct {
 	fakeStore
 }
 
-func (c *countingStore) InsertSubscription(ctx context.Context, userID uuid.UUID, start, end time.Time) error {
+func (c *countingStore) InsertSubscription(_ context.Context, _ uuid.UUID, _, _ time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	call := c.insertCount

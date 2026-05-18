@@ -39,7 +39,7 @@ func (d *Database) HasUserSubscription(
 	)
 	`
 	err = d.pool.QueryRow(ctx, query, userID).Scan(&has)
-	return
+	return has, err
 }
 
 // UpdateSubscriptionExpiredExcept updates status to 'expired' for all rows

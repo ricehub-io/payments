@@ -14,9 +14,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/polarsource/polar-go/models/components"
-	"github.com/ricehub-io/payments/internal/logging"
 	svix "github.com/svix/svix-webhooks/go"
 	"go.uber.org/zap"
+
+	"github.com/ricehub-io/payments/internal/logging"
 )
 
 type webhookEvent struct {
@@ -129,7 +130,12 @@ func (p *Polar) processWebhookEvent(
 
 	switch event.Type {
 	case components.WebhookEventTypeSubscriptionActive:
-		if err := p.db.InsertWebhookEvent(ctx, webhookID, string(event.Type), event.Data); err != nil {
+		if err := p.db.InsertWebhookEvent(
+			ctx,
+			webhookID,
+			string(event.Type),
+			event.Data,
+		); err != nil {
 			logger.Error("Could not insert webhook event log", zap.Error(err))
 		}
 

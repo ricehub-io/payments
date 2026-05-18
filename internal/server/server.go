@@ -5,11 +5,12 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
-	"github.com/ricehub-io/payments/internal/logging"
 	paymentv1 "github.com/ricehub-io/proto/gen/go/payment/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/ricehub-io/payments/internal/logging"
 )
 
 type subscriptionStore interface {
