@@ -1,4 +1,4 @@
-name: CI pipeline
+name: CI/CD pipeline
 
 on:
   push:
@@ -68,3 +68,42 @@ jobs:
 
       - name: Run test-integration target
         run: make test-integration
+
+  cd:
+    needs: [quality, vuln, test]
+    name: Deploying
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+    strategy:
+      matrix:
+        env: [dev]
+    environment: ${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile source code
+        run: make build
+
+      - name: Copy executable via SSH
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          source: "build/server"
+          target: ${{ secrets.CD_TARGET }}
+          strip_components: 1
+
+      - name: Restart systemd service
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          script: sudo systemctl restart payments-server@${{ matrix.env }}
